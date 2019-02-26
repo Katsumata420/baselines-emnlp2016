@@ -69,7 +69,8 @@ my $PTAUGMENT    = $CONFIG->{data}->{augmented_pt};
 die "Specify the annotated training data\n"
     if ( not $DATA or not -e $DATA );
 
-my $PATH_TC     = $CONFIG->{data}->{tc};
+my $PATH_TC_S     = $CONFIG->{data}->{tc_src};
+my $PATH_TC_T     = $CONFIG->{data}->{tc_tgt};
 my $PATH_BPE    = $CONFIG->{data}->{bpe};
 
 my $PATH_LM     = $CONFIG->{data}->{lm_path};
@@ -115,15 +116,18 @@ my $SUBWORD      = $CONFIG->{dir}->{subword_nmt};
 my $M2SCORER     = $CONFIG->{dir}->{m2scorer};
 
 # pre- and postprocessing commands
-my $TRUECASE
-    = "$PARALLEL $MOSESDIR/scripts/recaser/truecase.perl --model $PATH_TC";
+my $TRUECASE_S
+    = "$PARALLEL $MOSESDIR/scripts/recaser/truecase.perl --model $PATH_TC_S";
+my $TRUECASE_T
+    = "$PARALLEL $MOSESDIR/scripts/recaser/truecase.perl --model $PATH_TC_T";
 my $DETRUECASE  = "$MOSESDIR/scripts/recaser/detruecase.perl";
 my $CLEAN       = "perl -pe 's/^\\s+|\\s+\$//g; \$_ = \"\$_\\n\"'";
 my $ESCAPE      = "$MOSESDIR/scripts/tokenizer/escape-special-chars.perl";
 my $DEESCAPE    = "$MOSESDIR/scripts/tokenizer/deescape-special-chars.perl";
 my $BPE         = "$SUBWORD/subword_nmt/apply_bpe.py -c $PATH_BPE";
 my $DEBPE       = "sed 's/@@ //g'";
-my $PREPROC     = "$TRUECASE | $ESCAPE | $BPE";
+my $PREPROC_S     = "$BPE | $TRUECASE_S | $ESCAPE";
+my $PREPROC_T     = "$BPE | $TRUECASE_T | $ESCAPE";
 my $POSTPROC    = "$DEBPE | $DEESCAPE | $DETRUECASE";
 
 die "Set up the root directory\n"           if ( not $ROOT     or not -e $ROOT );
@@ -210,8 +214,8 @@ if ($CROSS) {
     message("Preprocessing training data chunks");
     foreach my $j ( 0 .. $N - 1 ) {
         my $j0 = sprintf( "%02d", $j );
-        `cut -f1 $DIR/part.$j0 | $PREPROC > $DIR/part.$j0.lc.err` unless ( -e "$DIR/part.$j0.lc.err" );
-        `cut -f2 $DIR/part.$j0 | $PREPROC > $DIR/part.$j0.lc.cor` unless ( -e "$DIR/part.$j0.lc.cor" );
+        `cut -f1 $DIR/part.$j0 | $PREPROC_S > $DIR/part.$j0.lc.err` unless ( -e "$DIR/part.$j0.lc.err" );
+        `cut -f2 $DIR/part.$j0 | $PREPROC_T > $DIR/part.$j0.lc.cor` unless ( -e "$DIR/part.$j0.lc.cor" );
     }
 
     my $pm = new Parallel::ForkManager($JOBS);
@@ -299,7 +303,7 @@ if ( not -e "$RDIR/train.lc.err" or not -e "$RDIR/train.lc.cor" ) {
 
 if (not $CROSS) {
     if ( not -e "$RDIR/test.lc.txt" or not -e "$RDIR/test.lc.err" ) {
-        `cut -f1 $DIR/full.txt | $PREPROC > $RDIR/test.lc.err`;
+        `cut -f1 $DIR/full.txt | $PREPROC_S > $RDIR/test.lc.err`;
         `cp $DIR/full.esc.txt $RDIR/test.lc.txt`;
 
     }
@@ -410,8 +414,8 @@ if ($REMERT) {
                     . " --m2out $abscurr/test.lc.mer.m2";
                 execute($mercmd);
 
-                execute("cat $abscurr/test.lc.mer.err | $PREPROC > $abscurr/test.lc.mer.err.tmp");
-                execute("cat $abscurr/test.lc.mer.cor | $PREPROC > $abscurr/test.lc.mer.cor.tmp");
+                execute("cat $abscurr/test.lc.mer.err | $PREPROC_S > $abscurr/test.lc.mer.err.tmp");
+                execute("cat $abscurr/test.lc.mer.cor | $PREPROC_T > $abscurr/test.lc.mer.cor.tmp");
 
                 execute("mv $abscurr/test.lc.mer.err.tmp $abscurr/test.lc.mer.err");
                 execute("mv $abscurr/test.lc.mer.cor.tmp $abscurr/test.lc.mer.cor");
@@ -730,9 +734,9 @@ sub prepare_test_set {
         `cat $data | $SCRIPTS/make_parallel.perl > $dir/$name.txt`
             unless (-e "$dir/$name.txt");
     }
-    `cut -f1 $dir/$name.txt | tee $dir/$name.err | $PREPROC > $dir/$name.lc.err`
+    `cut -f1 $dir/$name.txt | tee $dir/$name.err | $PREPROC_S > $dir/$name.lc.err`
         if ( not -s "$dir/$name.lc.err" );
-    `cut -f2 $dir/$name.txt | tee $dir/$name.cor | $PREPROC > $dir/$name.lc.cor`
+    `cut -f2 $dir/$name.txt | tee $dir/$name.cor | $PREPROC_T > $dir/$name.lc.cor`
         if ( not -s "$dir/$name.lc.cor" );
 }
 
